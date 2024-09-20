@@ -1,6 +1,6 @@
 import json
 from typing import Dict, Any, List, AsyncGenerator, Optional
-from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain.schema import BaseMessage
 from langchain.tools import BaseTool
 from src.tools import MathTool, WebSearchTool, WebParseTool
 from src.models.chat_models import ConversationContext, Role
@@ -62,7 +62,7 @@ class ConversationAgent:
 
             if response_complete:
                 break
-        
+
         yield self._format_response("context_update", context.model_dump())
 
     async def _process_tool(self, tool_content: Dict[str, Any], context: ConversationContext) -> AsyncGenerator[Dict[str, Any], None]:

@@ -12,7 +12,6 @@ class TagProcessor:
         self.current_tag = None
         self.content_buffer = ""
         self.tag_buffer = ""
-        self.full_content = ""
         self.debug_content = ""
         self.tag_pattern = re.compile(r'\[/?([^\]]+)\]')
 
@@ -25,18 +24,10 @@ class TagProcessor:
                 for result in self._process_token(token):
                     yield result
 
-            for result in self._process_token(']'):
-                yield result
             for result in self._flush_buffer():
                 yield result
 
-            if self.full_content:
-                yield {"tag": "content_full", "content": self.full_content}
-
             yield {"tag": "debug", "content": self.debug_content}
-        except Exception as e:
-            logger.error(f"Error processing stream: {str(e)}")
-            yield {"tag": "error", "content": f"Error processing stream: {str(e)}"}
         finally:
             self._reset()
 
@@ -86,12 +77,10 @@ class TagProcessor:
             return []
         
         if isinstance(content, str):
-            self.full_content += content
-            if self.current_tag in self.stream_tags:
-                return [{"tag": self.current_tag, "content": content}]
-            else:
-                self.content_buffer += content
-                return []
+            self.content_buffer += content
+            if self.current_tag == 'content':
+                return [{"tag": "content", "content": content}]
+            return []
         
         if isinstance(content, dict):
             self.content_buffer = content
@@ -103,20 +92,23 @@ class TagProcessor:
         if not self.content_buffer:
             return []
 
-        if self.current_tag not in self.buffer_tags:
-            results.append({"tag": "content", "content": self.content_buffer})
-        elif not self.current_tag == "tool":
+        if self.current_tag == 'content':
+            results.append({"tag": "content_full", "content": self.content_buffer})
+        elif self.current_tag not in self.buffer_tags:
             results.append({"tag": self.current_tag, "content": self.content_buffer})
-        elif isinstance(self.content_buffer, dict):
-            results.append({"tag": "tool", "content": self.content_buffer})
+        elif self.current_tag == "tool":
+            if isinstance(self.content_buffer, dict):
+                results.append({"tag": "tool", "content": self.content_buffer})
+            else:
+                try:
+                    tool_data = json.loads(self.content_buffer)
+                    results.append({"tag": "tool", "content": tool_data})
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse tool JSON: {self.content_buffer}")
+                    results.append({"tag": self.current_tag, "content": self.content_buffer})
         else:
-            try:
-                tool_data = json.loads(self.content_buffer)
-                results.append({"tag": "tool", "content": tool_data})
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse tool JSON: {self.content_buffer}")
-                results.append({"tag": self.current_tag, "content": self.content_buffer})
-    
+            results.append({"tag": self.current_tag, "content": self.content_buffer})
+
         self.content_buffer = ""
 
         return results
@@ -125,5 +117,4 @@ class TagProcessor:
         self.current_tag = None
         self.content_buffer = ""
         self.tag_buffer = ""
-        self.full_content = ""
         self.debug_content = ""
