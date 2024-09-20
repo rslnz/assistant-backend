@@ -1,7 +1,7 @@
-from typing import List, Dict
-from langchain.schema import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from typing import List
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from langchain_core.tools import BaseTool
 from src.models.chat_models import ConversationContext, Role
-from langchain.tools import BaseTool
 
 class MessagePreparer:
     def __init__(self, tools: List[BaseTool]):
@@ -36,32 +36,52 @@ class MessagePreparer:
             for tool in self.tools
         )
         
-        return f"""
-        Available tools:
+        return f"""Available tools:
         {tool_instructions}
 
-        Please format your response as follows:
-        [CONTENT]Your response here. You can include any text within this section. Note: All text must be inside the [CONTENT] tag, except for tool usage and summary sections.[/CONTENT][TOOL]{{"name": "tool_name","action": "Brief description of what the tool will do","arguments": {{"arg1": "value1","arg2": "value2"}}}}[/TOOL][SUMMARY]Brief summary of the conversation, including main points and conclusions.[/SUMMARY]
+        Format your response as follows:
+        [CONTENT]Your response here. All text must be inside this tag, except for tool usage and summary.[/CONTENT]
+        [TOOL]{{"name": "tool_name","action": "Brief description of tool action","arguments": {{"arg1": "value1","arg2": "value2"}}}}[/TOOL]
+        [SUMMARY]Brief summary of the conversation, including main points and conclusions.[/SUMMARY]
 
-        Important instructions for tool usage and response formatting:
-        1. Actively use the provided tools to enhance your responses. If a question requires information that you're not certain about or that might be time-sensitive, use an appropriate tool to fetch accurate and up-to-date information.
-        2. You can and should use multiple tools in one response if necessary to provide a comprehensive answer.
-        3. Always explain your reasoning for using each tool in the [CONTENT] section before the [TOOL] section.
-        4. In the "action" field of the [TOOL] section, provide a brief, user-friendly description of what the tool will do (e.g., "Searching for current weather information in Moscow").
-        5. After using a tool or multiple tools, always provide a [CONTENT] section to interpret or explain the results.
-        6. Consider the logical order of tool usage. For example, you might need to search for information before you can analyze it, but this should be done in separate responses.
-        7. Always include a [SUMMARY] section at the end of your response, summarizing the main points of the conversation so far, including any information obtained from tools.
-        8. Do not include any newlines between closing and opening tags.
-        9. If you're unsure about something or need more information to provide an accurate response, don't hesitate to use a tool to find the necessary information.
-        10. Remember that using tools to provide accurate, up-to-date information is preferred over relying solely on your pre-existing knowledge.
-        11. IMPORTANT: Always include closing tags for all sections. Specifically, make sure to include [/CONTENT], [/TOOL], and [/SUMMARY] tags to close their respective sections.
-        12. The [SUMMARY] section must always be the last section in your response.
-        13. If a tool returns an error, do not attempt to use the same tool with the same arguments again. Instead, inform the user about the error and suggest an alternative approach or tool if applicable.
+        Key instructions:
+        1. Use tools for up-to-date information when needed.
+        2. Use multiple tools if necessary for comprehensive answers.
+        3. Explain tool usage reasoning in [CONTENT] before [TOOL].
+        4. Provide user-friendly action descriptions in [TOOL].
+        5. Interpret tool results in a [CONTENT] section after tool use.
+        6. Consider logical order of tool usage.
+        7. Always include a [SUMMARY] at the end.
+        8. No newlines between tags.
+        9. Use tools when unsure or needing current information.
+        10. Prefer tool-provided information over pre-existing knowledge.
+        11. Always include closing tags for all sections.
+        12. [SUMMARY] must be the last section.
+        13. If a tool returns an error:
+            - Do not retry the same tool with similar arguments.
+            - Explain the error to the user in simple terms.
+            - Suggest alternative approaches or ask for clarification if needed.
+            - If the error seems critical (e.g., network issues, parsing problems), avoid using that tool again for the current query.
 
-        Remember to consider the context, previous tool results, and the conversation summary when deciding which tools to use next and how to respond. Your goal is to provide the most helpful, accurate, and up-to-date information possible, making full use of the available tools.
+        Consider context, previous results, and conversation summary when using tools and responding.
+        Handle tool errors gracefully and inform the user about any issues that may affect the quality or completeness of the information provided.
         """
 
     def _get_tool_args(self, tool: BaseTool) -> str:
-        if hasattr(tool, 'args'):
-            return ', '.join(f"{arg_name}: {arg_description}" for arg_name, arg_description in tool.args.items())
+        if hasattr(tool, 'args_schema') and tool.args_schema is not None:
+            return ', '.join(f"{name}: {field.description}" for name, field in tool.args_schema.model_fields.items())
         return "No arguments"
+
+    def get_tool_error_message(self, tool_name: str, error: str) -> str:
+        base_message = (
+            f"Error using {tool_name}: {error}. "
+            f"Do not use this tool again for this query. "
+        )
+        
+        additional_info = (
+            f"This error might affect the quality or completeness of the information provided. "
+            f"Consider alternative approaches or ask the user for different ways to obtain the required information. "
+            f"If you need this type of information, try rephrasing the query or using a different method."
+        )
+        
+        return base_message + additional_info

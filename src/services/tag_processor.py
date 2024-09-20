@@ -19,7 +19,6 @@ class TagProcessor:
         try:
             async for token in token_stream:
                 self.debug_content += token
-                logger.debug(f"Received token: {token}")
                 
                 for result in self._process_token(token):
                     yield result
