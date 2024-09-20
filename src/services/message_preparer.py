@@ -56,6 +56,7 @@ class MessagePreparer:
         10. Remember that using tools to provide accurate, up-to-date information is preferred over relying solely on your pre-existing knowledge.
         11. IMPORTANT: Always include closing tags for all sections. Specifically, make sure to include [/CONTENT], [/TOOL], and [/SUMMARY] tags to close their respective sections.
         12. The [SUMMARY] section must always be the last section in your response.
+        13. If a tool returns an error, do not attempt to use the same tool with the same arguments again. Instead, inform the user about the error and suggest an alternative approach or tool if applicable.
 
         Remember to consider the context, previous tool results, and the conversation summary when deciding which tools to use next and how to respond. Your goal is to provide the most helpful, accurate, and up-to-date information possible, making full use of the available tools.
         """
