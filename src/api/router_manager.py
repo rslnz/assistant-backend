@@ -1,7 +1,9 @@
 from fastapi import APIRouter
-from src.api.endpoints.root import RootEndpoints
+
 from src.api.endpoints.openai import OpenAIEndpoints
+from src.api.endpoints.root import RootEndpoints
 from src.services.openai_service import OpenAIService
+
 
 class APIRouterManager:
     def __init__(self, openai_service: OpenAIService):

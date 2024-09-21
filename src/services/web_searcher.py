@@ -1,14 +1,15 @@
-from typing import List, Dict, Any
-import aiohttp
-import re
-from bs4 import BeautifulSoup
-import logging
 import asyncio
-from langchain_openai import ChatOpenAI
 import json
-import urllib.parse
+import logging
 import random
+import re
 import time
+import urllib.parse
+from typing import Any, Dict, List
+
+import aiohttp
+from bs4 import BeautifulSoup
+from langchain_openai import ChatOpenAI
 
 from src.config import settings
 

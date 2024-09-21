@@ -1,5 +1,7 @@
 from fastapi.responses import JSONResponse
+
 from src.api.utils import handle_exceptions
+
 
 class RootEndpoints:
     @staticmethod

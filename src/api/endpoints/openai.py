@@ -1,8 +1,10 @@
 import logging
+
 from fastapi.responses import StreamingResponse
+
+from src.api.utils import handle_exceptions
 from src.models.chat_models import ChatRequest
 from src.services.openai_service import OpenAIService
-from src.api.utils import handle_exceptions
 
 logger = logging.getLogger(__name__)
 

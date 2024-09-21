@@ -1,6 +1,6 @@
-from typing import Dict, Any, List, AsyncGenerator, Optional
 import logging
 import re
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +88,8 @@ class TagProcessor:
             return None
         
         self.content_buffer += content
-        if self.current_tag == 'text':
-            return {"tag": "text", "content": content}
+        if self.current_tag in self.stream_tags:
+            return {"tag": self.current_tag, "content": content}
         return None
 
     def _flush_buffer(self) -> Optional[Dict[str, Any]]:

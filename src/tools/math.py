@@ -1,7 +1,9 @@
-from langchain_core.tools import BaseTool
-from typing import ClassVar, Dict, Any
-from pydantic import BaseModel, Field
 import math
+from typing import ClassVar
+
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
+
 
 class MathArgs(BaseModel):
     expression: str = Field(..., description="Mathematical expression to evaluate")

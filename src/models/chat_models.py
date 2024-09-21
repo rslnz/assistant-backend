@@ -1,8 +1,10 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict
 from enum import Enum
+from typing import Dict, List, Optional
+
+from pydantic import BaseModel
 
 from src.config import settings
+
 
 class Role(str, Enum):
     HUMAN = "human"
@@ -14,14 +16,6 @@ class MessageEntry(BaseModel):
     """Message role"""
     content: str
     """Message content"""
-
-class ClientCommand(BaseModel):
-    name: str
-    """Command name"""
-    description: str
-    """Command description"""
-    arguments: Dict[str, str]
-    """Command arguments, where key is argument name and value is description"""
 
 class ConversationContext(BaseModel):
     """Conversation context model"""

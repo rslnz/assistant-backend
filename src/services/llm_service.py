@@ -1,9 +1,11 @@
-from langchain_openai import ChatOpenAI
+import logging
+from typing import AsyncGenerator, List
+
 from langchain.schema import BaseMessage
-from typing import List, AsyncGenerator
+from langchain_openai import ChatOpenAI
+
 from src.config import settings
 
-import logging
 logger = logging.getLogger(__name__)
 
 class LLMService:

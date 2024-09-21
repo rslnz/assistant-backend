@@ -1,9 +1,10 @@
 from fastapi import FastAPI
+
 from src.api.router_manager import APIRouterManager
-from src.services.openai_service import OpenAIService
+from src.config import settings
 from src.services.conversation_agent import ConversationAgent
 from src.services.llm_service import LLMService
-from src.config import settings
+from src.services.openai_service import OpenAIService
 
 app = FastAPI(
     title="Chat API",
