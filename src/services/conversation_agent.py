@@ -92,10 +92,12 @@ class ConversationAgent:
 
             state.status = None
 
-        self._update_context(context, state, initial_message_count)
-
         if not process_completed:
             yield self._format_response("error", "Response generation did not complete within the maximum number of iterations.")
+
+        self._update_context(context, state, initial_message_count)
+
+        yield self._format_response("updated_context", context.model_dump())
 
     async def _process_llm_response(self, tag_processor: TagProcessor, llm_stream: AsyncGenerator[str, None], state: LLMProcessingState) -> AsyncGenerator[Dict[str, Any], None]:
         async for event in tag_processor.process_stream(llm_stream):
