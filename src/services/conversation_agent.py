@@ -10,6 +10,7 @@ from src.models.prompt_structures import LLMProcessingState, Status, StatusEnum,
 from src.services.llm_service import LLMService
 from src.services.message_preparer import MessagePreparer
 from src.services.tag_processor import TagProcessor
+from src.tools.datetime import DateTimeTool
 from src.tools.math import MathTool
 from src.tools.web_parse import WebParseTool
 from src.tools.web_search import WebSearchTool
@@ -22,7 +23,8 @@ class ConversationAgent:
         self.tools: List[BaseTool] = [
             WebSearchTool(),
             WebParseTool(),
-            MathTool()
+            MathTool(),
+            DateTimeTool(),
         ]
         self.message_preparer = MessagePreparer(self.tools)
 

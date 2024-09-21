@@ -124,9 +124,9 @@ class MessagePreparer:
         )
         
         additional_info = (
-            f"This error might affect the quality or completeness of the information provided. "
-            f"Consider alternative approaches or ask the user for different ways to obtain the required information. "
-            f"If you need this type of information, try rephrasing the query or using a different method."
+            "This error might affect the quality or completeness of the information provided. "
+            "Consider alternative approaches or ask the user for different ways to obtain the required information. "
+            "If you need this type of information, try rephrasing the query or using a different method."
         )
         
         return base_message + additional_info
