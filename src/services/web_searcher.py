@@ -194,10 +194,21 @@ class WebSearcher:
 
     async def parse_page(self, url: str, summarize: bool = False) -> Dict[str, Any]:
         try:
+            headers = {
+                "User-Agent": random.choice(self.user_agents),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Referer": "https://www.google.com/",
+                "DNT": "1",
+                "Accept-Encoding": "gzip, deflate, br"
+            }
             async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
+                async with session.get(url, headers=headers, allow_redirects=True) as response:
                     if response.status == 200:
                         html = await response.text()
+                    elif response.status == 403:
+                        logger.warning(f"Received status 403 for URL: {url}. The site may be blocking parsing.")
+                        return {'url': url, 'error': "Access forbidden (status 403). The site may be blocking parsing."}
                     else:
                         return {'url': url, 'error': f"Error loading page. Status code: {response.status}"}
 
@@ -226,7 +237,7 @@ class WebSearcher:
                 return {'url': url, 'content': text}
 
         except aiohttp.ClientError as e:
-            logger.error(f"Network error parsing page {url}: {str(e)}")
+            logger.error(f"Network error when parsing page {url}: {str(e)}")
             raise NetworkError(f"Failed to fetch page content due to network error: {str(e)}")
         except Exception as e:
             logger.error(f"Error parsing page {url}: {str(e)}")
