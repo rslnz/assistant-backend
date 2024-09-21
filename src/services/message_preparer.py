@@ -1,20 +1,19 @@
 from typing import List
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
 from langchain_core.tools import BaseTool
+
 from src.models.chat_models import ConversationContext, Role
+from src.models.prompt_structures import LLMProcessingState
 
 class MessagePreparer:
     def __init__(self, tools: List[BaseTool]):
         self.tools = tools
 
-    def prepare_messages(self, context: ConversationContext, system_prompt: str, message: str) -> List[BaseMessage]:
+    def prepare_messages(self, context: ConversationContext, state: LLMProcessingState, message: str) -> List[BaseMessage]:
         messages = []
         
-        if system_prompt:
-            messages.append(SystemMessage(content=system_prompt))
-        
-        if context.conversation_summary:
-            messages.append(SystemMessage(content=f"Conversation summary: {context.conversation_summary}"))
+        if state.summary:
+            messages.append(SystemMessage(content=f"Conversation summary: {state.summary}"))
         
         messages.extend(self._get_recent_messages(context))
         messages.append(HumanMessage(content=message))
@@ -36,35 +35,70 @@ class MessagePreparer:
             for tool in self.tools
         )
         
-        return f"""Available tools:
+        return f"""
+        Available tools:
         {tool_instructions}
 
-        Format your response as follows:
-        [CONTENT]Your response here. All text must be inside this tag, except for tool usage and summary.[/CONTENT]
-        [TOOL]{{"name": "tool_name","action": "Brief description of tool action","arguments": {{"arg1": "value1","arg2": "value2"}}}}[/TOOL]
-        [SUMMARY]Brief summary of the conversation, including main points and conclusions.[/SUMMARY]
+        CRITICAL: You MUST include [PLAN], [REASONING], [STATUS], and [SUMMARY] in EVERY response.
+
+        1. [PLAN]{{
+            "steps": [
+                {{
+                    "description": "Step description",
+                    "status": "pending|in_progress|completed|failed"
+                }}
+            ],
+            "current_step": 1,
+            "total_steps": 3
+        }}[/PLAN]
+
+        2. [REASONING]{{
+            "thought": "Your detailed internal reasoning process",
+            "user_notification": "Brief 1-5 word action description"
+        }}[/REASONING]
+
+        3. [TOOL]{{
+            "name": "tool_name",
+            "arguments": {{"arg1": "value1", "arg2": "value2"}},
+            "user_notification": "Brief 1-5 word action description"
+        }}[/TOOL] (Include only if a tool is being used)
+
+        4. [TEXT]Your response to the user. This is the ONLY content the user will see directly. It can include your final answer or requests for clarification.[/TEXT]
+
+        5. [STATUS]{{
+            "status": "continue|clarify|complete",
+            "reason": "Brief explanation for the current status"
+        }}[/STATUS]
+
+        6. [SUMMARY]Brief summary of the entire conversation, including main points and conclusions.[/SUMMARY]
 
         Key instructions:
-        1. Use tools for up-to-date information when needed.
-        2. Use multiple tools if necessary for comprehensive answers.
-        3. Explain tool usage reasoning in [CONTENT] before [TOOL].
-        4. Provide user-friendly action descriptions in [TOOL].
-        5. Interpret tool results in a [CONTENT] section after tool use.
-        6. Consider logical order of tool usage.
-        7. Always include a [SUMMARY] at the end.
-        8. No newlines between tags.
-        9. Use tools when unsure or needing current information.
-        10. Prefer tool-provided information over pre-existing knowledge.
-        11. Always include closing tags for all sections.
-        12. [SUMMARY] must be the last section.
-        13. If a tool returns an error:
-            - Do not retry the same tool with similar arguments.
-            - Explain the error to the user in simple terms.
-            - Suggest alternative approaches or ask for clarification if needed.
-            - If the error seems critical (e.g., network issues, parsing problems), avoid using that tool again for the current query.
+        1. Use [TOOL] when you need to gather information or perform an action.
+        2. Use [TEXT] ONLY for direct communication with the user. This includes:
+           - Final answers to their questions
+           - Requests for clarification or additional information
+           - Updates on the progress of complex tasks
+        3. Keep "user_notification" in [REASONING] and [TOOL] to 1-5 words.
+        4. Be conversational and natural in [TEXT], mentioning actions casually if needed.
+        5. For [STATUS]:
+           - Use 'continue' if more steps are needed.
+           - Use 'clarify' if you need user input.
+           - Use 'complete' when the task is finished.
+        6. Update the [PLAN] as you progress, changing step statuses and current_step.
 
-        Consider context, previous results, and conversation summary when using tools and responding.
-        Handle tool errors gracefully and inform the user about any issues that may affect the quality or completeness of the information provided.
+        Example response structure:
+        [PLAN]{{"steps":[{{"description":"Gather information about the topic","status":"completed"}},{{"description":"Analyze and summarize the information","status":"in_progress"}}],"current_step":2,"total_steps":2}}[/PLAN]
+        [REASONING]{{"thought":"Need to analyze the gathered information","user_notification":"Analyzing data"}}[/REASONING]
+        [TOOL]{{"name":"web_parse","arguments":{{"url":"https://example.com"}},"user_notification":"Parsing webpage"}}[/TOOL]
+        [TEXT]I've found some information about your question, but I need a bit more clarity. Could you please specify which aspect of the topic you're most interested in?[/TEXT]
+        [STATUS]{{"status":"clarify","reason":"Need more specific information from user"}}[/STATUS]
+        [SUMMARY]User asked about X. Gathered general information, now seeking clarification for more focused analysis.[/SUMMARY]
+
+        Remember:
+        - Always include ALL required tags ([PLAN], [REASONING], [TEXT], [STATUS], [SUMMARY]) in EVERY response.
+        - [TEXT] is the ONLY content the user sees directly. Use it for answers, clarifications, and progress updates.
+        - Put each tag on a separate line.
+        - Do not use line breaks within tags.
         """
 
     def _get_tool_args(self, tool: BaseTool) -> str:

@@ -27,7 +27,7 @@ class ConversationContext(BaseModel):
     """Conversation context model"""
     conversation_history: List[MessageEntry] = []
     """Conversation history"""
-    conversation_summary: Optional[str] = None
+    conversation_summary: str = ""
     """Brief summary of previous messages"""
 
     def add_message(self, role: Role, content: str):
@@ -46,7 +46,7 @@ class ChatRequest(BaseModel):
     """Chat request model"""
     message: str
     """User message"""
-    system_prompt: Optional[str] = None
+    system_prompt: str = ""
     """System prompt for the assistant"""
     context: Optional[ConversationContext] = None
     """Conversation context from the previous response"""

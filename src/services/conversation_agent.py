@@ -1,14 +1,16 @@
 import json
 from typing import Dict, Any, List, AsyncGenerator, Optional
-from langchain.schema import BaseMessage
+from langchain.schema import SystemMessage
 from langchain.tools import BaseTool
+import logging
+
 from src.tools import WebSearchTool, WebParseTool, MathTool
 from src.models.chat_models import ConversationContext, Role
 from src.services.llm_service import LLMService
 from src.services.tag_processor import TagProcessor
 from src.services.message_preparer import MessagePreparer
+from src.models.prompt_structures import ToolUse, StatusEnum, Status, LLMProcessingState
 
-import logging
 logger = logging.getLogger(__name__)
 
 class ConversationAgent:
@@ -23,101 +25,170 @@ class ConversationAgent:
 
     async def process_message(self, message: str, system_prompt: str, context: ConversationContext) -> AsyncGenerator[Dict[str, Any], None]:
         context.add_message(Role.HUMAN, message)
-        messages = self.message_preparer.prepare_messages(context, system_prompt, message)
+
+        state = LLMProcessingState()
+
+        state.add_message(SystemMessage(content=system_prompt))
+        state.messages.extend(self.message_preparer.prepare_messages(context, state, message))
         
         tag_processor = TagProcessor(
-            stream_tags=["content"],
-            buffer_tags=["tool", "summary"]
+            stream_tags=["text"],
+            buffer_tags=["tool", "summary", "plan", "reasoning", "status", "full_text"]
         )
 
         logger.debug(f"Starting to process message: {message}")
-        async for event in self._process_conversation(tag_processor, messages, context):
-            if event['type'] not in ["text"]:
-                logger.debug(f"Generated event: {event}")
+        async for event in self._process_conversation(tag_processor, state, context):
             yield event
 
         logger.debug("Finished processing message.")
 
-    async def _process_conversation(self, tag_processor: TagProcessor, messages: List[BaseMessage], context: ConversationContext) -> AsyncGenerator[Dict[str, Any], None]:
-        max_iterations = 5
-        for _ in range(max_iterations):
-            response_complete = True
-            try:
-                async for event in tag_processor.process_stream(self.llm_service.stream(messages)):
-                    if event['tag'] == 'content':
-                        yield self._format_response("text", event['content'])
-                    elif event['tag'] == 'tool':
-                        response_complete = False
-                        async for tool_event in self._process_tool(event['content'], context):
-                            yield tool_event
-                        messages = self.message_preparer.prepare_messages(context, messages[0].content, "Continue the conversation based on the tool results.")
-                        break
-                    elif event['tag'] == 'summary':
-                        context.set_summary(event['content'])
-                    elif event['tag'] == 'content_full':
-                        context.add_message(Role.AI, event['content'])
-                    elif event['tag'] == 'debug':
-                        logger.debug(f"Full debug content: {event['content']}")
-                    elif event['tag'] == 'error':
-                        context.add_message(Role.SYSTEM, event['content'])
-                        yield self._format_response("error", event['content'])
-                
-                if response_complete:
-                    break
-            except Exception as e:
-                logger.error(f"Error in conversation processing: {str(e)}")
-                yield self._format_response("error", f"An error occurred: {str(e)}")
+    async def _process_conversation(self, tag_processor: TagProcessor, state: LLMProcessingState, context: ConversationContext) -> AsyncGenerator[Dict[str, Any], None]:
+        extra_iterations = 3
+        max_iterations = extra_iterations
+        process_completed = False
+        initial_message_count = len(state.messages)
+
+        for iteration in range(25):
+            if iteration >= max_iterations:
+                yield self._format_response("error", "Response generation exceeded the maximum number of iterations.")
                 break
 
-        yield self._format_response("context_update", context.model_dump())
+            messages = self.message_preparer.prepare_messages(context, state, state.messages[-1].content if state.messages else "")
+            llm_stream = self.llm_service.stream(messages)
 
-    async def _process_tool(self, tool_content: Dict[str, Any], context: ConversationContext) -> AsyncGenerator[Dict[str, Any], None]:
-        tool_name = tool_content.get("name")
-        logger.debug(f"Processing tool: {tool_name}")
-        logger.debug(f"Tool content: {json.dumps(tool_content, indent=2)}")
-        
-        tool = self._get_tool(tool_name)
-        if not tool:
-            error_message = f"Tool '{tool_name}' is not available. Please use a different tool."
-            yield self._format_response("error", error_message)
-            context.add_message(Role.SYSTEM, error_message)
-            return
+            async for event in self._process_llm_response(tag_processor, llm_stream, state):
+                yield event
 
-        yield self._format_response("tool_start", {
-            "name": tool.name,
-            "description": tool.description,
-            "action": tool_content.get("action", f"Using tool '{tool.name}'...")
-        })
-        
-        try:
-            result = await self._execute_tool(tool, tool_content)
-            logger.debug(f"Tool result: {result}")
+            if not state.status:
+                logger.warning("No STATUS set after processing LLM response. Setting default STATUS.")
+                state.status = Status(status=StatusEnum.CONTINUE, reason="Continuing due to missing status")
+                yield self._format_response("status", state.status.model_dump())
+
+            if state.current_plan:
+                max_iterations = state.current_plan.total_steps + extra_iterations
+                logger.debug(f"Updated max_iterations to {max_iterations} based on current plan")
+
+            if state.status and state.status.status == StatusEnum.COMPLETE and state.tool_queue:
+                logger.warning("StatusEnum.COMPLETE was set, but tool_queue is not empty. Ignoring remaining tools.")
+                state.tool_queue.clear()
+                process_completed = True
+                break
+
+            if state.tool_queue:
+                async for event in self._handle_tool_queue(state.tool_queue, state):
+                    yield event
             
-            yield self._format_response("tool_end", {
+            if not state.status:
+                logger.warning("No [STATUS] tag received from LLM. Assuming COMPLETE.")
+                process_completed = True
+                break
+
+            if state.status.status in [StatusEnum.CLARIFY, StatusEnum.COMPLETE]:
+                process_completed = True
+                break
+
+            if state.status.status == StatusEnum.CONTINUE:
+                state.prepare_continuation_message()
+
+            state.status = None
+
+        self._update_context(context, state, initial_message_count)
+
+        if not process_completed:
+            yield self._format_response("error", "Response generation did not complete within the maximum number of iterations.")
+
+    async def _process_llm_response(self, tag_processor: TagProcessor, llm_stream: AsyncGenerator[str, None], state: LLMProcessingState) -> AsyncGenerator[Dict[str, Any], None]:
+        async for event in tag_processor.process_stream(llm_stream):
+            if event['tag'] == 'plan':
+                state.update_plan(event)
+            elif event['tag'] == 'reasoning':
+                user_notification = state.process_reasoning(event)
+                yield self._format_response("reasoning", user_notification)
+            elif event['tag'] == 'text':
+                yield self._format_response("text", event['content'])
+            elif event['tag'] == 'full_text':
+                state.process_full_text(event)
+            elif event['tag'] == 'tool':
+                state.process_tool(event)
+            elif event['tag'] == 'summary':
+                state.process_summary(event)
+            elif event['tag'] == 'status':
+                state.process_status(event)
+            elif event['tag'] == 'debug':
+                logger.debug(f"Debug content: {event['content']}")
+            else:
+                error_message = f"Unexpected tag received: {event['tag']}"
+                logger.error(error_message)
+                yield self._format_response("error", error_message)
+                return
+
+    async def _handle_tool_queue(self, tool_queue: List[ToolUse], state: LLMProcessingState) -> AsyncGenerator[Dict[str, Any], None]:
+        async for event in self._process_tool_queue(tool_queue):
+            if event['type'] in ['tool_start', 'tool_end', 'error']:
+                yield event
+
+            if event['type'] == 'tool_end':
+                result = {
+                    "id": event['content']['id'],
+                    "name": event['content']['name'],
+                    "result": event['content']['result']
+                }
+                state.add_tool_result(result)
+            elif event['type'] == 'error':
+                error_result = {
+                    "id": tool_queue[0].id,
+                    "name": tool_queue[0].name,
+                    "error": event['content']
+                }
+                state.add_tool_result(error_result)
+
+        state.tool_queue.clear()
+
+    def _update_context(self, context: ConversationContext, state: LLMProcessingState, initial_message_count: int):
+        for msg in state.messages[initial_message_count:]:
+            context.add_message(msg.type, msg.content)
+        if state.summary:
+            context.set_summary(state.summary)
+
+    async def _process_tool_queue(self, tool_queue: List[ToolUse]) -> AsyncGenerator[Dict[str, Any], None]:
+        for tool_use in tool_queue:
+            tool = self._get_tool(tool_use.name)
+            if not tool:
+                error_message = f"Tool '{tool_use.name}' is not available. Please use a different tool."
+                yield self._format_response("error", error_message)
+                continue
+            
+            yield self._format_response("tool_start", {
+                "id": tool_use.id,
                 "name": tool.name,
-                "result": result
+                "description": tool.description,
+                "user_notification": tool_use.user_notification
             })
 
-            context.add_message(Role.SYSTEM, f"Tool {tool.name} result: {result}")
-        except Exception as e:
-            error_message = self.message_preparer.get_tool_error_message(tool_name, str(e))
-            logger.error(f"Error in _process_tool: {error_message}")
-            yield self._format_response("error", error_message)
-            context.add_message(Role.SYSTEM, error_message)
+            try:
+                result = await self._execute_tool(tool, tool_use)
+                yield self._format_response("tool_end", {
+                    "id": tool_use.id,
+                    "name": tool.name,
+                    "result": result
+                })
+            except Exception as e:
+                error_message = self.message_preparer.get_tool_error_message(tool_use.name, str(e))
+                yield self._format_response("tool_end", {
+                    "id": tool_use.id,
+                    "name": tool.name,
+                    "error": error_message
+                })
 
     def _get_tool(self, tool_name: str) -> Optional[BaseTool]:
         return next((tool for tool in self.tools if tool.name == tool_name), None)
 
-    async def _execute_tool(self, tool: BaseTool, tool_data: Dict[str, Any]) -> str:
+    async def _execute_tool(self, tool: BaseTool, tool_use: ToolUse) -> str:
         logger.debug(f"Executing tool: {tool.name}")
-        logger.debug(f"Tool data: {json.dumps(tool_data, indent=2)}")
+        logger.debug(f"Tool data: {tool_use.model_dump_json()}")
 
-        arguments = tool_data.get("arguments", {})
-        logger.debug(f"Original arguments: {json.dumps(arguments, indent=2)}")
-        if not isinstance(arguments, dict):
-            arguments = {"query": str(arguments)}
-        
-        logger.debug(f"Final arguments being passed to tool: {json.dumps(arguments, indent=2)}")
+        arguments = tool_use.arguments
+        logger.debug(f"Arguments being passed to tool: {json.dumps(arguments)}")
         
         try:
             return await tool.arun(arguments)

@@ -1,7 +1,6 @@
-from typing import Dict, Any, List, AsyncGenerator
+from typing import Dict, Any, List, AsyncGenerator, Optional
 import logging
 import re
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,8 @@ class TagProcessor:
                 for result in self._process_token(token):
                     yield result
 
-            for result in self._flush_buffer():
+            result = self._flush_buffer()
+            if result:
                 yield result
 
             yield {"tag": "debug", "content": self.debug_content}
@@ -36,13 +36,17 @@ class TagProcessor:
 
         while self.tag_buffer:
             if '[' not in self.tag_buffer:
-                results.extend(self._process_content(self.tag_buffer))
+                content_result = self._process_content(self.tag_buffer)
+                if content_result:
+                    results.append(content_result)
                 self.tag_buffer = ""
                 continue
 
             parts = self.tag_buffer.split('[', 1)
             if parts[0]:
-                results.extend(self._process_content(parts[0]))
+                content_result = self._process_content(parts[0])
+                if content_result:
+                    results.append(content_result)
             self.tag_buffer = '[' + parts[1]
 
             match = self.tag_pattern.match(self.tag_buffer)
@@ -52,65 +56,50 @@ class TagProcessor:
             tag = match.group(1).lower()
             is_closing_tag = self.tag_buffer.startswith('[/')
             
-            results.extend(self._process_tag(tag, is_closing_tag))
+            result = self._process_tag(tag, is_closing_tag)
+            if result:
+                results.append(result)
             self.tag_buffer = self.tag_buffer[match.end():]
 
         return results
 
-    def _process_tag(self, tag: str, is_closing_tag: bool) -> List[Dict[str, Any]]:
+    def _process_tag(self, tag: str, is_closing_tag: bool) -> Optional[Dict[str, Any]]:
         if tag not in self.stream_tags and tag not in self.buffer_tags:
             return self._process_content(self.tag_pattern.match(self.tag_buffer).group(0))
 
-        results = []
         if is_closing_tag and tag == self.current_tag:
-            results.extend(self._flush_buffer())
+            result = self._flush_buffer()
             self.current_tag = None
+            return result
         elif not is_closing_tag:
             if self.current_tag:
-                results.extend(self._flush_buffer())
+                result = self._flush_buffer()
+                self.current_tag = tag
+                return result
             self.current_tag = tag
-        return results
+    
+        return None
 
-    def _process_content(self, content: str | Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _process_content(self, content: str) -> Optional[Dict[str, Any]]:
         if not content:
-            return []
+            return None
         
-        if isinstance(content, str):
-            self.content_buffer += content
-            if self.current_tag == 'content':
-                return [{"tag": "content", "content": content}]
-            return []
-        
-        if isinstance(content, dict):
-            self.content_buffer = content
-            return []
+        self.content_buffer += content
+        if self.current_tag == 'text':
+            return {"tag": "text", "content": content}
+        return None
 
-    def _flush_buffer(self) -> List[Dict[str, Any]]:
-        results = []
-
+    def _flush_buffer(self) -> Optional[Dict[str, Any]]:
         if not self.content_buffer:
-            return []
+            return None
 
-        if self.current_tag == 'content':
-            results.append({"tag": "content_full", "content": self.content_buffer})
-        elif self.current_tag not in self.buffer_tags:
-            results.append({"tag": self.current_tag, "content": self.content_buffer})
-        elif self.current_tag == "tool":
-            if isinstance(self.content_buffer, dict):
-                results.append({"tag": "tool", "content": self.content_buffer})
-            else:
-                try:
-                    tool_data = json.loads(self.content_buffer)
-                    results.append({"tag": "tool", "content": tool_data})
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse tool JSON: {self.content_buffer}")
-                    results.append({"tag": self.current_tag, "content": self.content_buffer})
+        if self.current_tag == 'text':
+            result = {"tag": "full_text", "content": self.content_buffer}
         else:
-            results.append({"tag": self.current_tag, "content": self.content_buffer})
+            result = {"tag": self.current_tag, "content": self.content_buffer}
 
         self.content_buffer = ""
-
-        return results
+        return result
 
     def _reset(self):
         self.current_tag = None
