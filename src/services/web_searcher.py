@@ -214,11 +214,20 @@ class WebSearcher:
 
             soup = BeautifulSoup(html, 'html.parser')
 
-            for element in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
+            for element in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'iframe']):
                 element.decompose()
 
-            main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=re.compile('content|main|article'))
-            
+            main_content = None
+            content_candidates = [
+                soup.find('main'),
+                soup.find('article'),
+                soup.find('div', class_=re.compile('content|main|article', re.I)),
+                soup.find('div', id=re.compile('content|main|article', re.I)),
+                soup.find('div', class_=re.compile('post|body', re.I)),
+                soup.find('div', id=re.compile('post|body', re.I))
+            ]
+            main_content = next((content for content in content_candidates if content), None)
+
             if main_content:
                 text = main_content.get_text(separator='\n', strip=True)
             else:
