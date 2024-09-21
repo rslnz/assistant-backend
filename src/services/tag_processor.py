@@ -26,6 +26,9 @@ class TagProcessor:
             if result:
                 yield result
 
+            if self.current_tag:
+                self.debug_content += f"[/{self.current_tag}]"
+
             yield {"tag": "debug", "content": self.debug_content}
         finally:
             self._reset()

@@ -56,6 +56,7 @@ class LLMProcessingState(BaseModel):
     messages: List[BaseMessage] = Field(default_factory=list)
     summary: Optional[str] = None
     summary_history: List[str] = Field(default_factory=list)
+    latest_summary: Optional[str] = None  # Новое поле для последней суммаризации
     status: Optional[Status] = None
     tool_results: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -96,8 +97,10 @@ class LLMProcessingState(BaseModel):
 
     def process_summary(self, event: Dict[str, Any]) -> None:
         self.summary_history.append(event['content'])
-        self.summary = f"Previous summaries: {' | '.join(self.summary_history[:-1])}\nLatest summary: {event['content']}"
+        self.latest_summary = event['content']
+        self.summary = f"Previous summaries: {' | '.join(self.summary_history[:-1])}\nLatest summary: {self.latest_summary}"
         logger.debug(f"Summary received: {self.summary}")
+        logger.debug(f"Latest summary: {self.latest_summary}")
 
     def add_message(self, message: BaseMessage) -> None:
         self.messages.append(message)

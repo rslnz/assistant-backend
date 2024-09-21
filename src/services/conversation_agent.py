@@ -147,8 +147,8 @@ class ConversationAgent:
     def _update_context(self, context: ConversationContext, state: LLMProcessingState, initial_message_count: int):
         for msg in state.messages[initial_message_count:]:
             context.add_message(msg.type, msg.content)
-        if state.summary:
-            context.set_summary(state.summary)
+        if state.latest_summary:
+            context.set_summary(state.latest_summary)
 
     async def _process_tool_queue(self, tool_queue: List[ToolUse]) -> AsyncGenerator[Dict[str, Any], None]:
         for tool_use in tool_queue:
