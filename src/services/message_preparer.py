@@ -39,7 +39,7 @@ class MessagePreparer:
         Available tools:
         {tool_instructions}
 
-        CRITICAL: You MUST include [PLAN], [REASONING], [STATUS], and [SUMMARY] in EVERY response.
+        CRITICAL: You MUST include [PLAN], [REASONING], [STATUS], and [SUMMARY] in EVERY response. Failure to include any of these will result in an incomplete and invalid response.
 
         1. [PLAN]{{
             "steps": [
@@ -51,26 +51,31 @@ class MessagePreparer:
             "current_step": 1,
             "total_steps": 3
         }}[/PLAN]
+        This MUST be included and updated in every response to reflect the current state of the task.
 
         2. [REASONING]{{
             "thought": "Your detailed internal reasoning process",
-            "user_notification": "Brief 1-5 word action description"
+            "user_notification": "Brief 1-5 word action description in user's language"
         }}[/REASONING]
+        This MUST be included in every response to explain your thought process.
 
         3. [TOOL]{{
             "name": "tool_name",
             "arguments": {{"arg1": "value1", "arg2": "value2"}},
-            "user_notification": "Brief 1-5 word action description"
-        }}[/TOOL] (Include only if a tool is being used)
+            "user_notification": "Brief 1-5 word action description in user's language"
+        }}[/TOOL]
+        Include only if a tool is being used.
 
         4. [TEXT]Your response to the user. This is the ONLY content the user will see directly. It can include your final answer or requests for clarification.[/TEXT]
+        This MUST be included in every response as it's the direct communication with the user.
 
         5. [STATUS]{{
             "status": "continue|clarify|complete",
-            "reason": "Brief explanation for the current status"
+            "reason": "Brief explanation of current status in user's language"
         }}[/STATUS]
+        This MUST be included in every response to indicate the current status of the task.
 
-        6. [SUMMARY]Brief summary of the entire conversation, including main points and conclusions.[/SUMMARY]
+        6. [SUMMARY]Brief summary of the entire conversation, including main points and conclusions. This MUST be included in EVERY response, even if there are no significant updates.[/SUMMARY]
 
         Key instructions:
         1. Use [TOOL] when you need to gather information or perform an action.
@@ -78,13 +83,15 @@ class MessagePreparer:
            - Final answers to their questions
            - Requests for clarification or additional information
            - Updates on the progress of complex tasks
-        3. Keep "user_notification" in [REASONING] and [TOOL] to 1-5 words.
+        3. Keep "user_notification" in [REASONING] and [TOOL] to 1-5 words in the user's language.
         4. Be conversational and natural in [TEXT], mentioning actions casually if needed.
         5. For [STATUS]:
            - Use 'continue' if more steps are needed.
            - Use 'clarify' if you need user input.
            - Use 'complete' when the task is finished.
+           - Provide "reason" in the user's language.
         6. Update the [PLAN] as you progress, changing step statuses and current_step.
+        7. ALWAYS include and update [SUMMARY], [PLAN], [REASONING], and [STATUS] in every response.
 
         Example response structure:
         [PLAN]{{"steps":[{{"description":"Gather information about the topic","status":"completed"}},{{"description":"Analyze and summarize the information","status":"in_progress"}}],"current_step":2,"total_steps":2}}[/PLAN]
@@ -92,13 +99,15 @@ class MessagePreparer:
         [TOOL]{{"name":"web_parse","arguments":{{"url":"https://example.com"}},"user_notification":"Parsing webpage"}}[/TOOL]
         [TEXT]I've found some information about your question, but I need a bit more clarity. Could you please specify which aspect of the topic you're most interested in?[/TEXT]
         [STATUS]{{"status":"clarify","reason":"Need more specific information from user"}}[/STATUS]
-        [SUMMARY]User asked about X. Gathered general information, now seeking clarification for more focused analysis.[/SUMMARY]
+        [SUMMARY]User asked about X. Gathered general information from web search. Currently seeking clarification to provide more focused analysis. Waiting for user to specify their main interest within the topic.[/SUMMARY]
 
         Remember:
-        - Always include ALL required tags ([PLAN], [REASONING], [TEXT], [STATUS], [SUMMARY]) in EVERY response.
+        - ALWAYS include ALL required tags ([PLAN], [REASONING], [TEXT], [STATUS], [SUMMARY]) in EVERY response. Omitting any tag is a critical error.
         - [TEXT] is the ONLY content the user sees directly. Use it for answers, clarifications, and progress updates.
         - Put each tag on a separate line.
         - Do not use line breaks within tags.
+        - Use the user's language for "user_notification" and "reason" fields.
+        - Each tag ([PLAN], [REASONING], [STATUS], [SUMMARY]) must be included and updated in every response, reflecting the current state of the conversation and task progress.
         """
 
     def _get_tool_args(self, tool: BaseTool) -> str:
