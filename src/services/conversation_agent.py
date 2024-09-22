@@ -18,7 +18,6 @@ from src.models.tags import Tag
 from src.services.llm_service import LLMService
 from src.services.message_preparer import MessagePreparer
 from src.services.tag_processor import TagConfig, TagProcessingMode, TagProcessor
-from src.tools.datetime import DateTimeTool
 from src.tools.math import MathTool
 from src.tools.web_parse import WebParseTool
 from src.tools.web_search import WebSearchTool
@@ -28,7 +27,7 @@ logger = logging.getLogger(__name__)
 class ConversationManager:
     def __init__(self, llm_service: LLMService):
         self.llm_service = llm_service
-        self.tools = [WebSearchTool(), WebParseTool(), MathTool(), DateTimeTool()]
+        self.tools = [WebSearchTool(), WebParseTool(), MathTool()]
         self.tool_manager = ToolManager(self.tools)
         self.message_preparer = MessagePreparer(self.tools)
         self.formatter = ResponseFormatter()

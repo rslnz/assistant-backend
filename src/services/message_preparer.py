@@ -1,5 +1,7 @@
+import datetime
 from typing import List
 
+import pytz
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 
@@ -37,7 +39,12 @@ class MessagePreparer:
             for tool in self.tools
         )
         
+        current_time_utc = datetime.datetime.now(pytz.UTC)
+        
         return f"""
+        Current date and time information:
+        - UTC: {current_time_utc.strftime("%Y-%m-%d %H:%M:%S %Z")}
+
         Available tools:
         {tool_instructions}
 
