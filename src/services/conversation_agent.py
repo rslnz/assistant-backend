@@ -35,7 +35,7 @@ class ConversationManager:
         self.tag_handler = TagHandler(self.formatter, self.message_preparer)
         self.context_updater = ContextUpdater()
         self.iteration_controller = IterationController()
-        self.max_tool_retries = 2  # Добавим ограничение на количество попыток использования инструментов
+        self.max_tool_retries = 2
 
     async def process_message(self, message: str, system_prompt: str, context: ConversationContext) -> AsyncGenerator[Dict[str, Any], None]:
         context.add_message(Role.HUMAN, message)
@@ -134,7 +134,6 @@ class ConversationManager:
         }
 
         async for event in tag_processor.process_stream(llm_stream):
-            logger.debug(f"Processing event: {event}")
             try:
                 tag = Tag(event['tag'])
             except ValueError:
@@ -145,7 +144,6 @@ class ConversationManager:
 
             handler = tag_handlers.get(tag, self.tag_handler.handle_unknown_tag)
             result = await handler(event, state)
-            
             if result is not None:
                 yield result
 

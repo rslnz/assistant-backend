@@ -131,7 +131,8 @@ The chat endpoint returns a streaming response. Here's a general algorithm for h
    c. If the remaining content is "[DONE]", this signals the end of the stream. Exit the loop.
    d. Otherwise, parse the content as JSON.
    e. Handle the parsed JSON based on its "type" field:
-      - "text": Accumulate or display the text content (see note below).
+      - "reasoning": Show the AI's user notification.
+      - "text": Accumulate or display the text content.
       - "tool_start": Indicate that a tool is being used.
       - "tool_end": Process and display the tool result.
       - "context_update": Store this updated context for the next request.
@@ -141,28 +142,31 @@ The chat endpoint returns a streaming response. Here's a general algorithm for h
 
 The `content` field for each event type contains the following:
 
-- "text": A string containing a token of the generated text from the AI. Note that these are individual tokens and should be concatenated to form the complete response. Clients should accumulate these tokens and update the display in real-time as they are received.
-- "tool_start": An object with the following structure:
+- "reasoning": A string containing a short notification for the user (1-5 words).
+- "text": A string containing a token of the generated text from the AI.
+- "tool_start": An object with the structure:
   ```json
   {
+    "id": "unique_tool_call_id",
     "name": "tool_name",
     "description": "Tool description",
-    "action": "Description of the current action"
+    "user_notification": "Short notification for the user (1-5 words)"
   }
   ```
-- "tool_end": An object with the following structure:
+- "tool_end": An object with the structure:
   ```json
   {
+    "id": "unique_tool_call_id",
     "name": "tool_name",
     "result": "Result of the tool execution"
   }
   ```
-- "context_update": The full updated ConversationContext object, which should be sent with the next request.
+- "context_update": The full updated ConversationContext object, containing the entire conversation history. This updated context must be sent with the next request to maintain conversation continuity.
 - "error": A string describing the error that occurred.
 
-Remember that the server is stateless, so it's crucial to send the updated context with each new request to preserve the conversation history.
+Remember that the server is stateless, so it's crucial to send the updated context (received in the "context_update" event) with each new request to preserve the conversation history and maintain continuity.
 
-This approach allows for real-time processing and display of the AI's response, including any tool usage, while maintaining the conversation state on the client side. The streaming of individual tokens for "text" events enables a more responsive and dynamic user interface, where the AI's response can be displayed as it's being generated.
+This approach allows for real-time processing and display of the AI's response, including its reasoning process and any tool usage, while maintaining the conversation state on the client side. The `id` field in `tool_start` and `tool_end` events represents a unique identifier for each specific tool call, allowing clients to match the start and end of individual tool executions and track their progress.
 
 ## Stateless Backend
 

@@ -72,8 +72,6 @@ class TagProcessor:
                 if len(parts) > 1:
                     self.content_buffer += parts[1]
                 config = self.tag_config.get(self.current_tag, TagConfig())
-                if self._is_streaming_config(config):
-                    results.append(self._create_result(self.current_tag, ""))
             else:
                 self.tag_buffer += token
         elif self.state == ProcessingState.READING_CONTENT:
