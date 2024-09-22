@@ -41,75 +41,61 @@ class MessagePreparer:
         Available tools:
         {tool_instructions}
 
-        CRITICAL: You MUST include [PLAN], [REASONING], [STATUS], and [SUMMARY] in EVERY response. Failure to include any of these will result in an incomplete and invalid response.
-
-        1. [PLAN]{{
-            "steps": [
-                {{
-                    "description": "Step description",
-                    "status": "pending|in_progress|completed|failed"
-                }}
-            ],
-            "current_step": 1,
-            "total_steps": 3
-        }}[/PLAN]
-        This MUST be included and updated in every response to reflect the current state of the task.
-
-        2. [REASONING]{{
-            "thought": "Your detailed internal reasoning process",
-            "user_notification": "Brief 1-5 word action description in user's language"
-        }}[/REASONING]
-        This MUST be included in every response to explain your thought process.
-
-        3. [TOOL]{{
-            "name": "tool_name",
-            "arguments": {{"arg1": "value1", "arg2": "value2"}},
-            "user_notification": "Brief 1-5 word action description in user's language"
-        }}[/TOOL]
-        Include only if a tool is being used.
-
-        4. [TEXT]Your response to the user. This is the ONLY content the user will see directly. It can include your final answer or requests for clarification.[/TEXT]
-        This MUST be included in every response as it's the direct communication with the user.
-
-        5. [STATUS]{{
-            "status": "continue|clarify|complete",
-            "reason": "Brief explanation of current status in user's language"
-        }}[/STATUS]
-        This MUST be included in every response to indicate the current status of the task.
-
-        6. [SUMMARY]Brief summary of the entire conversation, including main points and conclusions. This MUST be included in EVERY response, even if there are no significant updates.[/SUMMARY]
+        Your response MUST include these sections in order, each starting with its tag on a new line:
+        §plan, §reasoning, §text (optional), §tool (optional), §status, §summary
 
         Key instructions:
-        1. Use [TOOL] when you need to gather information or perform an action.
-        2. Use [TEXT] ONLY for direct communication with the user. This includes:
-           - Final answers to their questions
-           - Requests for clarification or additional information
-           - Updates on the progress of complex tasks
-        3. Keep "user_notification" in [REASONING] and [TOOL] to 1-5 words in the user's language.
-        4. Be conversational and natural in [TEXT], mentioning actions casually if needed.
-        5. For [STATUS]:
-           - Use 'continue' if more steps are needed.
-           - Use 'clarify' if you need user input.
-           - Use 'complete' when the task is finished.
-           - Provide "reason" in the user's language.
-        6. Update the [PLAN] as you progress, changing step statuses and current_step.
-        7. ALWAYS include and update [SUMMARY], [PLAN], [REASONING], and [STATUS] in every response.
+        1. §plan: JSON with steps, current_step, and total_steps. Update when:
+           - Starting a new task/subtask
+           - Completing a step
+           - Modifying due to new information or errors
+        2. §reasoning: JSON with thought and user_notification (1-5 words)
+        3. §text: Use ONLY for clarifications or presenting results
+        4. §status: JSON with status (continue/clarify/complete) and reason
+        5. §summary: Brief conversation overview
+        6. Use §tool only when necessary for complex tasks. Include 'user_notification' in the tool JSON (1-5 words).
+        7. Handle tool errors:
+           - Acknowledge error, try alternative or skip
+           - Don't repeat failed tool use
+           - Inform user if task can't be completed
+        8. Use user's language for §text, user_notification, and status reason
+        9. One step per request, don't loop indefinitely on failures
 
-        Example response structure:
-        [PLAN]{{"steps":[{{"description":"Gather information about the topic","status":"completed"}},{{"description":"Analyze and summarize the information","status":"in_progress"}}],"current_step":2,"total_steps":2}}[/PLAN]
-        [REASONING]{{"thought":"Need to analyze the gathered information","user_notification":"Analyzing data"}}[/REASONING]
-        [TOOL]{{"name":"web_parse","arguments":{{"url":"https://example.com"}},"user_notification":"Parsing webpage"}}[/TOOL]
-        [TEXT]I've found some information about your question, but I need a bit more clarity. Could you please specify which aspect of the topic you're most interested in?[/TEXT]
-        [STATUS]{{"status":"clarify","reason":"Need more specific information from user"}}[/STATUS]
-        [SUMMARY]User asked about X. Gathered general information from web search. Currently seeking clarification to provide more focused analysis. Waiting for user to specify their main interest within the topic.[/SUMMARY]
+        Example: Currency conversion with fallback
+        §plan
+        {{"steps":[{{"description":"Get exchange rate","status":"in_progress"}},{{"description":"Calculate conversion","status":"pending"}},{{"description":"Present result","status":"pending"}}],"current_step":1,"total_steps":3}}
+        §reasoning
+        {{"thought":"Need current EUR to USD exchange rate","user_notification":"Checking rate"}}
+        §tool
+        {{"name":"web_search","arguments":{{"query":"current EUR to USD exchange rate"}},"user_notification":"Checking exchange rate"}}
+        §status
+        {{"status":"continue","reason":"Fetching exchange rate"}}
+        §summary
+        User asked to convert euros to dollars, initiating web search for current exchange rate.
 
-        Remember:
-        - ALWAYS include ALL required tags ([PLAN], [REASONING], [TEXT], [STATUS], [SUMMARY]) in EVERY response. Omitting any tag is a critical error.
-        - [TEXT] is the ONLY content the user sees directly. Use it for answers, clarifications, and progress updates.
-        - Put each tag on a separate line.
-        - Do not use line breaks within tags.
-        - Use the user's language for "user_notification" and "reason" fields.
-        - Each tag ([PLAN], [REASONING], [STATUS], [SUMMARY]) must be included and updated in every response, reflecting the current state of the conversation and task progress.
+        Next iteration (assuming web search failed):
+        §plan
+        {{"steps":[{{"description":"Get exchange rate","status":"failed"}},{{"description":"Use approximate rate","status":"in_progress"}},{{"description":"Calculate conversion","status":"pending"}},{{"description":"Present result with disclaimer","status":"pending"}}],"current_step":2,"total_steps":4}}
+        §reasoning
+        {{"thought":"Web search failed, using approximate rate","user_notification":"Using estimate"}}
+        §status
+        {{"status":"continue","reason":"Using approximate exchange rate"}}
+        §summary
+        Web search for exchange rate failed, proceeding with approximate rate for conversion.
+
+        Final iteration:
+        §plan
+        {{"steps":[{{"description":"Get exchange rate","status":"failed"}},{{"description":"Use approximate rate","status":"completed"}},{{"description":"Calculate conversion","status":"completed"}},{{"description":"Present result with disclaimer","status":"in_progress"}}],"current_step":4,"total_steps":4}}
+        §reasoning
+        {{"thought":"Conversion calculated, need to present result with disclaimer","user_notification":"Showing result"}}
+        §text
+        Based on an approximate exchange rate (as I couldn't fetch the current rate), 100 EUR is about 110 USD. Please note this is an estimate and the actual rate may vary. For accurate conversions, I recommend checking with a bank or financial website.
+        §status
+        {{"status":"complete","reason":"Conversion estimate provided"}}
+        §summary
+        Provided estimated EUR to USD conversion with disclaimer due to inability to fetch current exchange rate.
+
+        Failure to follow this format will result in an invalid response.
         """
 
     def _get_tool_args(self, tool: BaseTool) -> str:

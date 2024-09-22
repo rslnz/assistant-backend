@@ -19,22 +19,22 @@ class MessageEntry(BaseModel):
 
 class ConversationContext(BaseModel):
     """Conversation context model"""
-    conversation_history: List[MessageEntry] = []
+    history: List[MessageEntry] = []
     """Conversation history"""
-    conversation_summary: str = ""
-    """Brief summary of previous messages"""
+    summary: str = ""
+    """Latest summary of the conversation, including plan, reasoning, and status"""
 
     def add_message(self, role: Role, content: str):
         """Adds a message to the conversation history"""
-        self.conversation_history.append(MessageEntry(role=role, content=content))
+        self.history.append(MessageEntry(role=role, content=content))
 
     def set_summary(self, summary: str):
         """Updates the conversation summary"""
-        self.conversation_summary = summary
+        self.summary = summary
 
     def get_recent_messages(self, limit: int = settings.MAX_HISTORY_MESSAGES) -> List[Dict[str, str]]:
         """Returns the most recent messages from the conversation history"""
-        return [entry.model_dump() for entry in self.conversation_history[-limit:]]
+        return [entry.model_dump() for entry in self.history[-limit:]]
 
 class ChatRequest(BaseModel):
     """Chat request model"""

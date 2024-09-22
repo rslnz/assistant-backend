@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from src.api.router_manager import APIRouterManager
 from src.config import settings
-from src.services.conversation_agent import ConversationAgent
+from src.services.conversation_agent import ConversationManager
 from src.services.llm_service import LLMService
 from src.services.openai_service import OpenAIService
 
@@ -15,8 +15,8 @@ app = FastAPI(
 )
 
 llm_service = LLMService()
-conversation_agent = ConversationAgent(llm_service)
-openai_service = OpenAIService(conversation_agent)
+conversation_manager = ConversationManager(llm_service)
+openai_service = OpenAIService(conversation_manager)
 
 router_manager = APIRouterManager(openai_service)
 app.include_router(router_manager.get_router())

@@ -24,10 +24,10 @@ class WebSearchTool(BaseTool):
     description: ClassVar[str] = "Performs a web search based on the given query and returns a list of search results."
     args_schema: ClassVar[type[WebSearchArgs]] = WebSearchArgs
 
-    def _run(self, query: str, num_results: int = 10) -> str:
+    def _run(self, query: str, num_results: int = 3) -> str:
         raise NotImplementedError("WebSearchTool does not support synchronous execution")
 
-    async def _arun(self, query: str, num_results: int = 10) -> str:
+    async def _arun(self, query: str, num_results: int = 3) -> str:
         logger.debug(f"WebSearchTool._arun called with arguments: query={query}, num_results={num_results}")
 
         searcher = WebSearcher()

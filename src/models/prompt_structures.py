@@ -1,11 +1,10 @@
-import json
 import logging
 import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from langchain.schema import AIMessage, BaseMessage, SystemMessage
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class Reasoning(BaseModel):
 class ToolUse(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    arguments: dict
+    arguments: Dict[str, Any]
     user_notification: str
 
 class StatusEnum(str, Enum):
@@ -39,16 +38,8 @@ class StatusEnum(str, Enum):
     COMPLETE = "complete"
 
 class Status(BaseModel):
-    status: str
+    status: StatusEnum
     reason: Optional[str] = None
-
-class PromptStructures(BaseModel):
-    plan: Optional[Plan] = None
-    reasoning: Optional[Reasoning] = None
-    tool: Optional[ToolUse] = None
-    text: Optional[str] = None
-    summary: Optional[str] = None
-    status: Optional[Status] = None
 
 class LLMProcessingState(BaseModel):
     current_plan: Optional[Plan] = None
@@ -57,55 +48,24 @@ class LLMProcessingState(BaseModel):
     messages: List[BaseMessage] = Field(default_factory=list)
     summary: Optional[str] = None
     summary_history: List[str] = Field(default_factory=list)
-    latest_summary: Optional[str] = None  # Новое поле для последней суммаризации
+    latest_summary: Optional[str] = None
     status: Optional[Status] = None
     tool_results: List[Dict[str, Any]] = Field(default_factory=list)
-
-    def update_plan(self, event: Dict[str, Any]) -> None:
-        try:
-            new_plan = Plan.model_validate_json(event['content'])
-            if self.current_plan is None or new_plan != self.current_plan:
-                self.current_plan = new_plan
-                logger.debug(f"Updated plan: {new_plan.model_dump_json()}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse plan JSON: {e}")
-            logger.debug(f"Problematic content: {event['content']}")
-
-    def process_reasoning(self, event: Dict[str, Any]) -> str:
-        logger.debug(f"Processing reasoning: {event['content']}")
-        try:
-            reasoning = Reasoning.model_validate_json(event['content'])
-            self.reasoning_history.append(reasoning.thought)
-            logger.debug(f"Reasoning: {reasoning.model_dump_json()}")
-            return reasoning.user_notification
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse reasoning JSON: {e}")
-            logger.debug(f"Problematic content: {event['content']}")
-            return ""
-
-    def process_tool(self, event: Dict[str, Any]) -> None:
-        try:
-            tool_use = ToolUse.model_validate_json(event['content'])
-            self.tool_queue.append(tool_use)
-            logger.debug(f"Tool added to queue: {tool_use.model_dump_json()}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse tool JSON: {e}")
-            logger.debug(f"Problematic content: {event['content']}")
-
-    def process_full_text(self, event: Dict[str, Any]) -> None:
-        self.messages.append(AIMessage(content=event['content']))
-        logger.debug(f"Full text received: {event['content']}")
-
-    def process_summary(self, event: Dict[str, Any]) -> None:
-        self.summary_history.append(event['content'])
-        self.latest_summary = event['content']
-        self.summary = f"Previous summaries: {' | '.join(self.summary_history[:-1])}\nLatest summary: {self.latest_summary}"
-        logger.debug(f"Summary received: {self.summary}")
-        logger.debug(f"Latest summary: {self.latest_summary}")
-
+    max_iterations: int = 3
+    
     def add_message(self, message: BaseMessage) -> None:
         self.messages.append(message)
-        logger.debug(f"Message added: {message.model_dump_json()}")
+        logger.debug(f"Message added: {message.content}")
+
+    def add_ai_message(self, content: str) -> None:
+        message = AIMessage(content=content)
+        self.messages.append(message)
+        logger.debug(f"AI message added: {content}")
+
+    def add_system_message(self, content: str) -> None:
+        message = SystemMessage(content=content)
+        self.messages.append(message)
+        logger.debug(f"System message added: {content}")
 
     def add_tool_result(self, result: Dict[str, Any]) -> None:
         self.tool_results.append(result)
@@ -130,14 +90,3 @@ class LLMProcessingState(BaseModel):
         logger.debug(f"Continuation message added: {continuation_message}")
 
         self.tool_results.clear()
-
-    def process_status(self, event: Dict[str, Any]) -> None:
-        try:
-            self.status = Status.model_validate_json(event['content'])
-            logger.info(f"Status processed: {self.status.model_dump_json()}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse status JSON: {e}")
-            logger.debug(f"Problematic content: {event['content']}")
-        except ValidationError as e:
-            logger.error(f"Failed to validate Status: {e}")
-            logger.debug(f"Problematic content: {event['content']}")

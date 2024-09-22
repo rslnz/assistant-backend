@@ -3,16 +3,16 @@ import logging
 from typing import Any, AsyncGenerator, Dict
 
 from src.models.chat_models import ChatRequest, ConversationContext
-from src.services.conversation_agent import ConversationAgent
+from src.services.conversation_agent import ConversationManager
 from src.services.llm_service import LLMService
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class OpenAIService:
-    def __init__(self, conversation_agent: ConversationAgent):
+    def __init__(self, conversation_manager: ConversationManager):
         self.llm_service = LLMService()
-        self.conversation_agent = conversation_agent
+        self.conversation_manager = conversation_manager
 
     async def process_chat_stream(self, request: ChatRequest) -> AsyncGenerator[str, None]:
         message = request.message
@@ -22,7 +22,7 @@ class OpenAIService:
         logger.debug(f"Starting chat stream with message: {message}")
         
         try:
-            async for response in self.conversation_agent.process_message(message, system_prompt, context):
+            async for response in self.conversation_manager.process_message(message, system_prompt, context):
                 yield self._format_chunk(response)
 
             yield "data: [DONE]\n\n"
