@@ -19,7 +19,7 @@ class OpenAIService:
         system_prompt = request.system_prompt
         context = request.context or ConversationContext()
 
-        logger.debug(f"Starting chat stream with message: {message}")
+        logger.debug(f"Starting chat stream with message: '{message}'")
         
         try:
             async for response in self.conversation_manager.process_message(message, system_prompt, context):

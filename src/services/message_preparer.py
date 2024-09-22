@@ -5,33 +5,41 @@ import pytz
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 
-from src.models.chat_models import ConversationContext, Role
-from src.models.prompt_structures import LLMProcessingState
+from src.models.base_models import Role
+from src.models.conversation_state import ConversationState
+from src.config import settings
 
 
 class MessagePreparer:
     def __init__(self, tools: List[BaseTool]):
         self.tools = tools
 
-    def prepare_messages(self, context: ConversationContext, state: LLMProcessingState, message: str) -> List[BaseMessage]:
+    def prepare_messages(self, state: ConversationState) -> List[BaseMessage]:
         messages = []
-        
+
+        if state.system_prompt:
+            messages.append(SystemMessage(content=state.system_prompt))
+
         if state.summary:
             messages.append(SystemMessage(content=f"Conversation summary: {state.summary}"))
-        
-        messages.extend(self._get_recent_messages(context))
-        messages.append(HumanMessage(content=message))
+
+        messages.extend(self._get_recent_messages(state))
+
+        if state.user_input:
+            messages.append(HumanMessage(content=state.user_input))
+
         messages.append(SystemMessage(content=self._get_format_instructions()))
         
         return messages
 
-    def _get_recent_messages(self, context: ConversationContext) -> List[BaseMessage]:
+    def _get_recent_messages(self, state: ConversationState) -> List[BaseMessage]:
         message_map = {
-            Role.HUMAN.value: HumanMessage,
-            Role.AI.value: AIMessage,
-            Role.SYSTEM.value: SystemMessage
+            Role.HUMAN: HumanMessage,
+            Role.AI: AIMessage,
+            Role.SYSTEM: SystemMessage
         }
-        return [message_map[entry['role']](content=entry['content']) for entry in context.get_recent_messages()]
+        recent_messages = state.get_recent_messages(limit=settings.MAX_HISTORY_MESSAGES)
+        return [message_map[entry.role](content=entry.content) for entry in recent_messages]
 
     def _get_format_instructions(self) -> str:
         tool_instructions = "\n".join(
@@ -109,17 +117,3 @@ class MessagePreparer:
         if hasattr(tool, 'args_schema') and tool.args_schema is not None:
             return ', '.join(f"{name}: {field.description}" for name, field in tool.args_schema.model_fields.items())
         return "No arguments"
-
-    def get_tool_error_message(self, tool_name: str, error: str) -> str:
-        base_message = (
-            f"Error using {tool_name}: {error}. "
-            f"Do not use this tool again for this query. "
-        )
-        
-        additional_info = (
-            "This error might affect the quality or completeness of the information provided. "
-            "Consider alternative approaches or ask the user for different ways to obtain the required information. "
-            "If you need this type of information, try rephrasing the query or using a different method."
-        )
-        
-        return base_message + additional_info

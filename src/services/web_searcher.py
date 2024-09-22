@@ -220,21 +220,38 @@ class RelevanceChecker:
         {json.dumps(results, indent=2)}
 
         For each search result, determine if it is relevant to the query.
-        Respond with a JSON array of boolean values (true for relevant, false for not relevant).
-        The array should have the same length as the number of search results.
+        Respond with a JSON object containing a single field "relevance" which is an array of boolean values (true for relevant, false for not relevant).
+        The array should have exactly {len(results)} elements, one for each search result.
+
+        Example response format:
+        {{
+            "relevance": [true, false, true, true, false]
+        }}
+
+        Your response:
         """
         response = await self.llm.ainvoke(prompt)
         try:
             response_content = response.content if hasattr(response, 'content') else str(response)
-            relevance_checks = json.loads(response_content)
+            response_content = re.sub(r'```json\s*|\s*```', '', response_content).strip()
+            parsed_response = json.loads(response_content)
+            
+            if not isinstance(parsed_response, dict) or 'relevance' not in parsed_response:
+                logger.warning(f"Invalid response format. Expected dict with 'relevance' key, got: {parsed_response}")
+                return [True] * len(results)
+            
+            relevance_checks = parsed_response['relevance']
+            
             if not isinstance(relevance_checks, list) or len(relevance_checks) != len(results):
-                raise ValueError("Invalid response format")
+                logger.warning(f"Invalid relevance array. Expected list of {len(results)} booleans, got: {relevance_checks}")
+                return [True] * len(results)
+            
             return relevance_checks
         except json.JSONDecodeError:
             logger.error(f"Error decoding relevance check response: {response_content}")
             return [True] * len(results)
-        except AttributeError:
-            logger.error(f"Unexpected response format: {response}")
+        except Exception as e:
+            logger.error(f"Unexpected error in relevance check: {str(e)}")
             return [True] * len(results)
 
 class HTMLFetcher:
