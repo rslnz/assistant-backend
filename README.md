@@ -53,9 +53,9 @@ MAX_HISTORY_MESSAGES=10
 
 ## Running the Application
 
-### Using run.sh (Recommended)
+### Using run.sh (Linux/macOS)
 
-The easiest way to run the application is by using the provided `run.sh` script. This script sets up the virtual environment, installs dependencies, and starts the application using uvicorn.
+The easiest way to run the application on Linux or macOS is by using the provided `run.sh` script. This script sets up the virtual environment, installs dependencies, and starts the application.
 
 1. Make sure the script is executable:
 
@@ -69,29 +69,50 @@ chmod +x run.sh
 ./run.sh
 ```
 
-This will set up everything and start the server using uvicorn.
+This will set up everything and start the server.
 
-### Using uvicorn directly
+### Using run.ps1 (Windows)
 
-If you prefer to run the application directly with uvicorn:
+For Windows users, we provide a PowerShell script `run.ps1` that performs the same functions as `run.sh`.
+
+1. Open PowerShell and navigate to the project directory.
+
+2. You may need to change the execution policy to run the script. You can do this for the current PowerShell session with:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+```
+
+3. Run the script:
+
+```powershell
+.\run.ps1
+```
+
+This will set up the virtual environment, install dependencies, and start the server.
+
+### Running manually
+
+If you prefer to run the application manually:
 
 1. Ensure you're in the virtual environment:
 
+For Linux/macOS:
+
 ```bash
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+source venv/bin/activate
 ```
 
-2. Set the necessary environment variables:
+For Windows:
 
-```bash
-export $(grep -v '^#' .env | xargs)
-export PYTHONPATH=$PYTHONPATH:$(pwd)
+```powershell
+venv\Scripts\activate
 ```
 
-3. Run the application with uvicorn:
+2. Run the application:
 
 ```bash
-uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+python src/main.py
 ```
 
 ### Using Docker

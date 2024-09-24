@@ -17,9 +17,8 @@ fi
 pip install --upgrade pip
 pip install -r requirements.txt --upgrade
 
-export $(grep -v '^#' .env | xargs)
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
-uvicorn src.main:app --host $HOST --port $PORT --reload --log-level info
+python src/main.py
 
 deactivate
