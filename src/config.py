@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     API_V1: str
     HOST: str = "0.0.0.0"

@@ -1,13 +1,10 @@
 from enum import Enum
 
-class Tag(str, Enum):
-    PLAN = "plan"
+
+class ResponseType(str, Enum):
     REASONING = "reasoning"
     TEXT = "text"
     FULL_TEXT = "full_text"
-    TOOL = "tool"
-    SUMMARY = "summary"
-    STATUS = "status"
     DEBUG = "debug"
     ERROR = "error"
     TOOL_START = "tool_start"
